@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp   
+spec:
+  replicas: 1   # стартуем с 1 пода, потом HPA может увеличивать при нагрузке
+  selector:
+    matchLabels:
+      app: webapp   
+  strategy:
+    type: RollingUpdate   # обновление подов без даунтайма
+  template:
+    metadata:
+      labels:
+        app: webapp   
+    spec:
+      containers:
+      - name: webapp-container
+        image: nginx:latest   # пока nginx для теста, в реальном приложении свой образ
+        ports:
+        - containerPort: 80   # порт, на котором контейнер слушает
+        resources:
+          requests:
+            cpu: "200m"       # сколько CPU гарантируем поду
+            memory: "128Mi"   # сколько памяти гарантируем
+          limits:
+            cpu: "500m"       # максимум CPU при всплесках нагрузки
+            memory: "128Mi"   # максимум памяти (у нас всегда 128Mi)
+        readinessProbe:
+          httpGet:
+            path: /         
+            port: 80
+          initialDelaySeconds: 5   # ждем 5 сек перед первой проверкой
+          periodSeconds: 5         # проверяем каждые 5 сек
+        startupProbe:
+          httpGet:
+            path: /       
+            port: 80
+          initialDelaySeconds: 5    # стартовое окно, даем приложению время на запуск
+          periodSeconds: 5          # проверяем каждые 5 сек
+          failureThreshold: 6       # считаем контейнер неудачно запустившимся если 6 раз не ответил
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-svc   # сервис для доступа к подам
+spec:
+  selector:
+    app: webapp       
+  ports:
+  - port: 80          
+    targetPort: 80     
+  type: ClusterIP       # сервис внутри кластера, внешне пока не доступен
